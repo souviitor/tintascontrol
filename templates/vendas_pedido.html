@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Pedido de Venda{% endblock %}
+{% block page_title %}Pedido de Venda{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="section-title" style="margin-bottom:16px">Novo Pedido de Venda <small style="font-size:12px;color:var(--text3);font-weight:400">Número será gerado automaticamente</small></div>
+
+  <div style="display:flex;gap:10px;margin-bottom:12px">
+    <div style="flex:1" class="pos-rel">
+      <div class="search-bar"><span>🔍</span><input type="text" id="item-search" placeholder="Buscar produto por nome ou código..."/></div>
+      <div class="autocomplete-list" id="ac-list"></div>
+    </div>
+    <input type="number" id="item-qtd" placeholder="Qtd" min="1" step="0.001" value="1" style="width:100px"/>
+    <button class="btn btn-primary" onclick="addItem()">＋ Adicionar</button>
+  </div>
+
+  <div class="table-wrap" style="min-height:80px;margin-bottom:12px">
+    <table>
+      <thead><tr><th>Código</th><th>Produto</th><th>Qtd</th><th>UN</th><th>Vlr. Unit.</th><th>Total</th><th></th></tr></thead>
+      <tbody id="items-tb"><tr><td colspan="7"><div class="empty" style="padding:20px"><p>Nenhum item adicionado</p></div></td></tr></tbody>
+    </table>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border)">
+    <span style="font-weight:700;font-size:16px">Total do Pedido:</span>
+    <span id="total-label" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--orange)">R$ 0,00</span>
+  </div>
+
+  <div style="display:flex;gap:10px;margin-top:8px">
+    <button class="btn btn-primary" onclick="finalizar()">✅ Finalizar Pedido</button>
+    <button class="btn btn-ghost" onclick="limpar()">🗑 Limpar</button>
+  </div>
+</div>
+
+<!-- SUCESSO -->
+<div class="modal-overlay" id="modal-ok">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">✅</div>
+    <div class="modal-title" style="margin-bottom:8px">Pedido criado!</div>
+    <div style="color:var(--text2);margin-bottom:8px">Número: <strong id="ped-num" style="color:var(--orange)"></strong></div>
+    <div style="color:var(--text2);margin-bottom:20px">Total: <strong id="ped-val"></strong></div>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-ok').classList.remove('open')">Fechar</button>
+      <button class="btn btn-primary" onclick="novoPedido()">Novo Pedido</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let itemList=[];
+let selectedProd=null;
+
+setupAutocomplete(
+  document.getElementById('item-search'),
+  document.getElementById('ac-list'),
+  p=>{ selectedProd=p; document.getElementById('item-search').value=`${p.codigo} – ${p.nome}`; }
+);
+
+function addItem(){
+  if(!selectedProd){toast('Selecione um produto','error');return;}
+  const qtd=parseFloat(document.getElementById('item-qtd').value)||0;
+  if(qtd<=0){toast('Quantidade inválida','error');return;}
+  if(selectedProd.qtd_estoque<qtd){toast(`Estoque insuficiente. Disponível: ${selectedProd.qtd_estoque}`,'error');return;}
+  const existing=itemList.find(i=>i.produto_id===selectedProd.id);
+  if(existing) existing.quantidade+=qtd;
+  else itemList.push({produto_id:selectedProd.id,nome:selectedProd.nome,codigo:selectedProd.codigo,unidade:selectedProd.unidade,preco:selectedProd.preco_venda,quantidade:qtd});
+  renderItems();
+  selectedProd=null;
+  document.getElementById('item-search').value='';
+  document.getElementById('item-qtd').value='1';
+}
+
+function removeItem(i){itemList.splice(i,1);renderItems();}
+
+function renderItems(){
+  let total=0;
+  const tb=document.getElementById('items-tb');
+  if(!itemList.length){tb.innerHTML='<tr><td colspan="7"><div class="empty" style="padding:20px"><p>Nenhum item adicionado</p></div></td></tr>';document.getElementById('total-label').textContent='R$ 0,00';return;}
+  tb.innerHTML=itemList.map((it,i)=>{const sub=it.quantidade*it.preco;total+=sub;return`
+    <tr>
+      <td><code>${it.codigo}</code></td><td><strong>${it.nome}</strong></td>
+      <td>${it.quantidade.toLocaleString('pt-BR')}</td><td>${it.unidade}</td>
+      <td>${brl(it.preco)}</td>
+      <td style="color:var(--orange);font-weight:600">${brl(sub)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeItem(${i})">🗑</button></td>
+    </tr>`;}).join('');
+  document.getElementById('total-label').textContent=brl(total);
+}
+
+async function finalizar(){
+  if(!itemList.length){toast('Adicione itens ao pedido','error');return;}
+  try{
+    const p=await api('/api/pedidos','POST',{itens:itemList.map(i=>({produto_id:i.produto_id,quantidade:i.quantidade}))});
+    document.getElementById('ped-num').textContent=p.numero;
+    document.getElementById('ped-val').textContent=brl(p.valor_total);
+    document.getElementById('modal-ok').classList.add('open');
+    itemList=[];
+    renderItems();
+  }catch(e){toast(e.message,'error');}
+}
+
+function limpar(){itemList=[];renderItems();}
+function novoPedido(){document.getElementById('modal-ok').classList.remove('open');}
+</script>
+{% endblock %}

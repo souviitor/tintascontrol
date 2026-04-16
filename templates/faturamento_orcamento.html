@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Orçamento{% endblock %}
+{% block page_title %}Orçamento{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="section-title" style="margin-bottom:16px">Novo Orçamento <small style="font-size:12px;color:var(--text3);font-weight:400">Número gerado automaticamente</small></div>
+
+  <div style="display:flex;gap:10px;margin-bottom:12px">
+    <div style="flex:1" class="pos-rel">
+      <div class="search-bar"><span>🔍</span><input type="text" id="item-search" placeholder="Digite código ou nome do produto..."/></div>
+      <div class="autocomplete-list" id="ac-list"></div>
+    </div>
+    <input type="number" id="item-qtd" placeholder="Qtd" min="1" step="0.001" value="1" style="width:100px"/>
+    <button class="btn btn-primary" onclick="addItem()">＋ Adicionar</button>
+  </div>
+
+  <div class="table-wrap" style="min-height:60px;margin-bottom:12px">
+    <table>
+      <thead><tr><th>Código</th><th>Produto</th><th>Qtd</th><th>UN</th><th>Vlr. Unit.</th><th>Total</th><th></th></tr></thead>
+      <tbody id="items-tb"><tr><td colspan="7"><div class="empty" style="padding:20px"><p>Nenhum item</p></div></td></tr></tbody>
+    </table>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-top:1px solid var(--border);margin-bottom:16px">
+    <span style="font-weight:700;font-size:15px">Total do Orçamento:</span>
+    <span id="total-label" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--orange)">R$ 0,00</span>
+  </div>
+
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-danger" onclick="limpar()">✕ Cancelar</button>
+    <button class="btn btn-primary" onclick="imprimir()">🖨️ Imprimir Orçamento</button>
+    <button class="btn btn-success" onclick="salvar()">✅ Salvar Orçamento</button>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let itemList=[];
+let selectedProd=null;
+
+setupAutocomplete(
+  document.getElementById('item-search'),
+  document.getElementById('ac-list'),
+  p=>{ selectedProd=p; document.getElementById('item-search').value=`${p.codigo} – ${p.nome}`; }
+);
+
+function addItem(){
+  if(!selectedProd){toast('Selecione um produto','error');return;}
+  const qtd=parseFloat(document.getElementById('item-qtd').value)||0;
+  if(qtd<=0){toast('Quantidade inválida','error');return;}
+  const existing=itemList.find(i=>i.produto_id===selectedProd.id);
+  if(existing) existing.quantidade+=qtd;
+  else itemList.push({produto_id:selectedProd.id,nome:selectedProd.nome,codigo:selectedProd.codigo,unidade:selectedProd.unidade,preco:selectedProd.preco_venda,quantidade:qtd});
+  renderItems();
+  selectedProd=null;
+  document.getElementById('item-search').value='';
+  document.getElementById('item-qtd').value='1';
+}
+
+function removeItem(i){itemList.splice(i,1);renderItems();}
+
+function getTotal(){return itemList.reduce((s,it)=>s+it.quantidade*it.preco,0);}
+
+function renderItems(){
+  const tb=document.getElementById('items-tb');
+  if(!itemList.length){tb.innerHTML='<tr><td colspan="7"><div class="empty" style="padding:20px"><p>Nenhum item</p></div></td></tr>';document.getElementById('total-label').textContent='R$ 0,00';return;}
+  tb.innerHTML=itemList.map((it,i)=>{const sub=it.quantidade*it.preco;return`
+    <tr>
+      <td><code>${it.codigo}</code></td><td><strong>${it.nome}</strong></td>
+      <td>${it.quantidade.toLocaleString('pt-BR')}</td><td>${it.unidade}</td>
+      <td>${brl(it.preco)}</td>
+      <td style="color:var(--orange);font-weight:600">${brl(sub)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeItem(${i})">🗑</button></td>
+    </tr>`;}).join('');
+  document.getElementById('total-label').textContent=brl(getTotal());
+}
+
+function limpar(){itemList=[];renderItems();}
+
+async function salvar(){
+  if(!itemList.length){toast('Adicione itens','error');return;}
+  try{
+    const o=await api('/api/orcamentos','POST',{itens:itemList.map(i=>({produto_id:i.produto_id,quantidade:i.quantidade}))});
+    toast(`Orçamento ${o.numero} salvo!`,'success');
+    limpar();
+  }catch(e){toast(e.message,'error');}
+}
+
+function imprimir(){
+  if(!itemList.length){toast('Adicione itens para imprimir','error');return;}
+  const total=getTotal();
+  const linhas=itemList.map(it=>`
+    <tr>
+      <td>${it.codigo}</td><td>${it.nome}</td>
+      <td style="text-align:center">${it.quantidade} ${it.unidade}</td>
+      <td style="text-align:right">R$ ${it.preco.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:bold">R$ ${(it.quantidade*it.preco).toFixed(2)}</td>
+    </tr>`).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Orçamento TintaControl</title>
+  <style>
+    body{font-family:Arial,sans-serif;padding:30px;color:#222;}
+    h1{color:#F97316;font-size:24px;margin-bottom:4px;}
+    .sub{color:#666;font-size:13px;margin-bottom:24px;}
+    table{width:100%;border-collapse:collapse;margin-bottom:20px;}
+    th{background:#F97316;color:#fff;padding:9px 12px;text-align:left;font-size:12px;}
+    td{padding:8px 12px;border-bottom:1px solid #eee;font-size:13px;}
+    .total{text-align:right;font-size:18px;font-weight:bold;color:#F97316;}
+    .footer{color:#999;font-size:11px;margin-top:30px;}
+  </style></head><body>
+  <h1>🎨 TintaControl</h1>
+  <div class="sub">Orçamento gerado em ${new Date().toLocaleString('pt-BR')}</div>
+  <table>
+    <thead><tr><th>Código</th><th>Produto</th><th>Quantidade</th><th style="text-align:right">Vlr. Unit.</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>${linhas}</tbody>
+  </table>
+  <div class="total">Total do Orçamento: R$ ${total.toFixed(2)}</div>
+  <div class="footer">Este orçamento não constitui nota fiscal.</div>
+  <script>window.onload=()=>window.print();<\/script>
+  </body></html>`;
+  const w=window.open('','_blank');
+  w.document.write(html);w.document.close();
+}
+</script>
+{% endblock %}

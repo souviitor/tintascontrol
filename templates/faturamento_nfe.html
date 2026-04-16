@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Gerar NF-e{% endblock %}
+{% block page_title %}Gerar NF-e / Pedido de Venda{% endblock %}
+{% block content %}
+<div class="card" style="max-width:600px;margin-bottom:16px">
+  <div class="section-title" style="margin-bottom:16px">Pedido de Venda / Gerar NF-e</div>
+  <div class="form-group">
+    <label>Número do Pedido</label>
+    <input id="num-pedido" placeholder="ex: PED000001" oninput="this.value=this.value.toUpperCase()"/>
+  </div>
+  <button class="btn btn-ghost" onclick="buscar()">🔍 Buscar Pedido</button>
+</div>
+
+<div class="card" id="result-card" style="display:none;max-width:700px">
+  <div class="section-header">
+    <div class="section-title">Detalhes do Pedido</div>
+    <div id="ped-status-badge"></div>
+  </div>
+  <table style="width:100%;margin-bottom:16px">
+    <thead><tr><th>Nº Pedido</th><th>Status</th><th>Valor Total</th><th>Data</th></tr></thead>
+    <tbody id="tb-pedido"></tbody>
+  </table>
+  <div class="section-title" style="margin-bottom:10px;font-size:14px">Itens do Pedido</div>
+  <div class="table-wrap" style="margin-bottom:20px">
+    <table>
+      <thead><tr><th>Código</th><th>Produto</th><th>Qtd</th><th>UN</th><th>Vlr. Unit.</th><th>Total</th></tr></thead>
+      <tbody id="tb-itens"></tbody>
+    </table>
+    <div style="text-align:right;padding:12px 14px;font-weight:700;font-size:16px">
+      Total: <span id="total-label" style="color:var(--orange)"></span>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-ghost" onclick="voltar()">← Voltar</button>
+    <button class="btn btn-danger" id="btn-cancelar" onclick="cancelarPedido()">✕ Cancelar Pedido</button>
+    <button class="btn btn-primary" id="btn-nfe" onclick="gerarNFe()">🧾 Gerar NF-e</button>
+  </div>
+</div>
+
+<!-- NF-e GERADA -->
+<div class="modal-overlay" id="modal-nfe">
+  <div class="modal" style="max-width:420px;text-align:center">
+    <div style="font-size:48px;margin-bottom:12px">🧾</div>
+    <div class="modal-title" style="margin-bottom:8px">NF-e Gerada!</div>
+    <p style="color:var(--text2);margin-bottom:8px">Pedido <strong id="nfe-num" style="color:var(--orange)"></strong> faturado com sucesso.</p>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:20px">⚠️ Integração real com SEFAZ requer certificado digital. Esta é uma simulação.</p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-nfe').classList.remove('open');voltar()">Fechar</button>
+      <button class="btn btn-primary" onclick="imprimirDANFE()">🖨️ Imprimir DANFE</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let pedidoAtual=null;
+
+async function buscar(){
+  const num=document.getElementById('num-pedido').value.trim();
+  if(!num){toast('Digite o número do pedido','error');return;}
+  try{
+    pedidoAtual=await api(`/api/pedidos/${num}`);
+    renderPedido();
+  }catch(e){toast('Pedido não encontrado','error');}
+}
+
+function renderPedido(){
+  document.getElementById('result-card').style.display='block';
+  const p=pedidoAtual;
+  document.getElementById('tb-pedido').innerHTML=`
+    <tr>
+      <td><strong>${p.numero}</strong></td>
+      <td>${statusBadge(p.status)}</td>
+      <td style="color:var(--orange);font-weight:600">${brl(p.valor_total)}</td>
+      <td style="color:var(--text3)">${p.criado_em}</td>
+    </tr>`;
+  document.getElementById('tb-itens').innerHTML=p.itens.map(i=>`
+    <tr>
+      <td><code>${i.codigo||'–'}</code></td>
+      <td>${i.produto}</td>
+      <td>${i.quantidade}</td>
+      <td>${i.unidade||'–'}</td>
+      <td>${brl(i.preco_unitario)}</td>
+      <td style="color:var(--orange);font-weight:600">${brl(i.total)}</td>
+    </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;color:var(--text3)">Sem itens</td></tr>';
+  document.getElementById('total-label').textContent=brl(p.valor_total);
+  const isAberto=p.status==='aberto';
+  document.getElementById('btn-nfe').disabled=!isAberto;
+  document.getElementById('btn-nfe').style.opacity=isAberto?'1':'0.5';
+  document.getElementById('btn-cancelar').disabled=!isAberto;
+  document.getElementById('btn-cancelar').style.opacity=isAberto?'1':'0.5';
+}
+
+function voltar(){document.getElementById('result-card').style.display='none';pedidoAtual=null;}
+
+async function cancelarPedido(){
+  if(!pedidoAtual||pedidoAtual.status!=='aberto')return;
+  if(!confirm(`Cancelar o pedido ${pedidoAtual.numero}?`))return;
+  try{
+    await api(`/api/pedidos/${pedidoAtual.numero}/cancelar`,'POST');
+    toast('Pedido cancelado!','success');voltar();
+  }catch(e){toast(e.message,'error');}
+}
+
+async function gerarNFe(){
+  if(!pedidoAtual)return;
+  try{
+    await api(`/api/pedidos/${pedidoAtual.numero}/faturar`,'POST');
+    document.getElementById('nfe-num').textContent=pedidoAtual.numero;
+    document.getElementById('modal-nfe').classList.add('open');
+  }catch(e){toast(e.message,'error');}
+}
+
+function imprimirDANFE(){
+  const p=pedidoAtual;
+  const linhas=p.itens.map(i=>`<tr><td>${i.codigo||'–'}</td><td>${i.produto}</td><td>${i.quantidade} ${i.unidade||''}</td><td style="text-align:right">${brl(i.preco_unitario)}</td><td style="text-align:right;font-weight:bold">${brl(i.total)}</td></tr>`).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>DANFE – ${p.numero}</title>
+  <style>body{font-family:Arial,sans-serif;padding:24px;color:#222;}h2{color:#F97316;}table{width:100%;border-collapse:collapse;}th{background:#F97316;color:#fff;padding:8px;}td{padding:7px 10px;border-bottom:1px solid #eee;font-size:13px;}.total{text-align:right;font-size:16px;font-weight:bold;color:#F97316;margin-top:12px;}.info{color:#666;font-size:12px;margin-bottom:18px;}</style>
+  </head><body>
+  <h2>🧾 DANFE – ${p.numero}</h2>
+  <div class="info">Emitido em: ${new Date().toLocaleString('pt-BR')} &nbsp;|&nbsp; Status: FATURADO</div>
+  <table><thead><tr><th>Código</th><th>Produto</th><th>Qtd</th><th style="text-align:right">Vlr. Unit.</th><th style="text-align:right">Total</th></tr></thead>
+  <tbody>${linhas}</tbody></table>
+  <div class="total">Total: ${brl(p.valor_total)}</div>
+  <p style="font-size:11px;color:#aaa;margin-top:24px">⚠️ Documento simulado. Integração com SEFAZ requer certificado digital A1/A3.</p>
+  <script>window.onload=()=>window.print();<\/script></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+}
+
+document.getElementById('num-pedido').addEventListener('keydown',e=>{if(e.key==='Enter')buscar();});
+</script>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Produtos{% endblock %}
+{% block page_title %}Cadastro de Produtos{% endblock %}
+{% block topbar_extra %}
+<button class="btn btn-primary" onclick="openModal()">＋ Novo Produto</button>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="search-bar" style="margin-bottom:16px">
+    <span>🔍</span>
+    <input type="text" id="search" placeholder="Buscar por nome ou código..." oninput="loadProds()"/>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Código</th><th>Nome</th><th>UN</th><th>Categoria</th><th>Qtd Estoque</th><th>Custo Unit.</th><th>Markup</th><th>Venda Unit.</th><th>Ações</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MODAL NOVO/EDITAR -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Novo Produto</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <input type="hidden" id="edit-id"/>
+    <div class="form-grid">
+      <div class="form-group"><label>Nome *</label><input id="f-nome" placeholder="Nome do produto"/></div>
+      <div class="form-group"><label>Unidade</label>
+        <select id="f-un"><option>UN</option><option>L</option><option>KG</option><option>M</option><option>CX</option><option>PC</option></select>
+      </div>
+      <div class="form-group"><label>Categoria</label><input id="f-cat" placeholder="ex: Tinta Acrílica"/></div>
+      <div class="form-group"><label>Descrição</label><input id="f-desc" placeholder="Opcional"/></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvar()">Salvar Produto</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadProds(){
+  const q=document.getElementById('search').value;
+  const prods=await api(`/api/produtos?q=${encodeURIComponent(q)}`);
+  const tb=document.getElementById('tb');
+  if(!prods.length){tb.innerHTML='<tr><td colspan="9"><div class="empty"><div class="empty-icon">📦</div><p>Nenhum produto encontrado</p></div></td></tr>';return;}
+  tb.innerHTML=prods.map(p=>`
+    <tr>
+      <td><code>${p.codigo}</code></td>
+      <td><strong>${p.nome}</strong>${p.descricao?`<br><small style="color:var(--text3)">${p.descricao}</small>`:''}</td>
+      <td>${p.unidade}</td>
+      <td>${p.categoria||'–'}</td>
+      <td style="color:${p.qtd_estoque>0?'var(--green)':'var(--red)'}"><strong>${p.qtd_estoque.toLocaleString('pt-BR')}</strong></td>
+      <td>${brl(p.custo_unitario)}</td>
+      <td>${p.markup}%</td>
+      <td style="color:var(--orange);font-weight:600">${brl(p.preco_venda)}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick='editProd(${JSON.stringify(p)})'>✏️ Editar</button></td>
+    </tr>`).join('');
+}
+function openModal(p=null){
+  document.getElementById('modal-title').textContent=p?'Editar Produto':'Novo Produto';
+  document.getElementById('edit-id').value=p?p.id:'';
+  document.getElementById('f-nome').value=p?p.nome:'';
+  document.getElementById('f-un').value=p?p.unidade:'UN';
+  document.getElementById('f-cat').value=p?p.categoria:'';
+  document.getElementById('f-desc').value=p?p.descricao:'';
+  document.getElementById('modal').classList.add('open');
+}
+function editProd(p){openModal(p);}
+function closeModal(){document.getElementById('modal').classList.remove('open');}
+async function salvar(){
+  const id=document.getElementById('edit-id').value;
+  const nome=document.getElementById('f-nome').value.trim();
+  if(!nome){toast('Nome é obrigatório','error');return;}
+  const body={nome,unidade:document.getElementById('f-un').value,categoria:document.getElementById('f-cat').value,descricao:document.getElementById('f-desc').value};
+  try{
+    if(id) await api(`/api/produtos/${id}`,'PUT',body);
+    else await api('/api/produtos','POST',body);
+    toast(id?'Produto atualizado!':'Produto criado!','success');
+    closeModal();loadProds();
+  }catch(e){toast(e.message,'error');}
+}
+loadProds();
+</script>
+{% endblock %}

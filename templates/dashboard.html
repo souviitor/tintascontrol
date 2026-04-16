@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+<div class="stat-grid" id="stats">
+  <div class="stat-card"><div class="stat-label">Total de Produtos</div><div class="stat-value" id="s-prods">–</div><div class="stat-sub">Itens cadastrados</div></div>
+  <div class="stat-card"><div class="stat-label">Pedidos Abertos</div><div class="stat-value" id="s-pedidos" style="color:var(--orange)">–</div><div class="stat-sub">Aguardando</div></div>
+  <div class="stat-card"><div class="stat-label">Valor em Estoque</div><div class="stat-value" id="s-estoque" style="color:var(--yellow);font-size:22px">–</div><div class="stat-sub">Preço de venda</div></div>
+  <div class="stat-card"><div class="stat-label">Pedidos Hoje</div><div class="stat-value" id="s-hoje">–</div><div class="stat-sub">Realizados hoje</div></div>
+</div>
+
+<div class="card">
+  <div class="section-header">
+    <div class="section-title">Movimentações Recentes</div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nº Pedido</th><th>Status</th><th>Valor</th><th>Data</th></tr></thead>
+      <tbody id="tb-mov"><tr><td colspan="4" class="empty"><div class="empty-icon">📭</div><p>Carregando...</p></td></tr></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(async ()=>{
+  const d = await api('/api/dashboard');
+  document.getElementById('s-prods').textContent = d.total_produtos;
+  document.getElementById('s-pedidos').textContent = d.pedidos_abertos;
+  document.getElementById('s-estoque').textContent = brl(d.valor_estoque);
+  document.getElementById('s-hoje').textContent = d.pedidos_hoje;
+  const tb = document.getElementById('tb-mov');
+  if(!d.movimentos.length){
+    tb.innerHTML='<tr><td colspan="4"><div class="empty"><div class="empty-icon">📭</div><p>Nenhuma movimentação</p></div></td></tr>';
+    return;
+  }
+  tb.innerHTML = d.movimentos.map(m=>`
+    <tr>
+      <td><strong>${m.numero}</strong></td>
+      <td>${statusBadge(m.status)}</td>
+      <td style="color:var(--orange)">${brl(m.valor_total)}</td>
+      <td style="color:var(--text3)">${m.criado_em}</td>
+    </tr>`).join('');
+})();
+</script>
+{% endblock %}

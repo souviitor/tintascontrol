@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}Saída de Estoque{% endblock %}
+{% block page_title %}Saídas de Estoque{% endblock %}
+{% block topbar_extra %}
+<button class="btn btn-primary" onclick="openModal()">＋ Nova Saída</button>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Número</th><th>Motivo</th><th>Data</th><th>Itens</th><th>Valor Total</th><th>Usuário</th></tr></thead>
+      <tbody id="tb"><tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div><p>Carregando...</p></div></td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MODAL NOVA SAÍDA -->
+<div class="modal-overlay" id="modal" style="align-items:flex-start;padding:40px 20px;overflow-y:auto;">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-header">
+      <div class="modal-title">Nova Saída de Estoque</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group">
+        <label>Motivo</label>
+        <select id="f-motivo">
+          <option>Ajuste de Estoque</option>
+          <option>Perda / Avaria</option>
+          <option>Uso Interno</option>
+          <option>Devolução</option>
+          <option>Outro</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <input id="f-obs" placeholder="Opcional"/>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:8px">
+      <label>Adicionar Itens</label>
+      <div style="display:flex;gap:10px;align-items:flex-end">
+        <div style="flex:1" class="pos-rel">
+          <div class="search-bar"><span>🔍</span><input type="text" id="item-search" placeholder="Código ou nome..."/></div>
+          <div class="autocomplete-list" id="ac-list"></div>
+        </div>
+        <div style="width:120px">
+          <input type="number" id="item-qtd" placeholder="Qtd" min="1" step="0.001" value="1" style="margin-bottom:0"/>
+        </div>
+        <button class="btn btn-primary" onclick="addItem()">＋ Adicionar</button>
+      </div>
+    </div>
+
+    <div class="table-wrap" style="margin-bottom:16px">
+      <table>
+        <thead><tr><th>Código</th><th>Produto</th><th>Qtd</th><th>UN</th><th>Vlr. Unit.</th><th>Total</th><th></th></tr></thead>
+        <tbody id="items-tb"><tr><td colspan="7"><div class="empty" style="padding:20px"><p>Nenhum item</p></div></td></tr></tbody>
+      </table>
+      <div style="text-align:right;padding:10px 14px;font-weight:700;font-size:15px">
+        Total: <span id="total-label" style="color:var(--orange)">R$ 0,00</span>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvar()">✅ Confirmar Saída</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let itemList=[];
+let selectedProd=null;
+
+setupAutocomplete(
+  document.getElementById('item-search'),
+  document.getElementById('ac-list'),
+  p=>{ selectedProd=p; document.getElementById('item-search').value=`${p.codigo} – ${p.nome}`; }
+);
+
+function addItem(){
+  if(!selectedProd){toast('Selecione um produto','error');return;}
+  const qtd=parseFloat(document.getElementById('item-qtd').value)||0;
+  if(qtd<=0){toast('Quantidade inválida','error');return;}
+  const existing=itemList.find(i=>i.produto_id===selectedProd.id);
+  if(existing) existing.quantidade+=qtd;
+  else itemList.push({produto_id:selectedProd.id,nome:selectedProd.nome,codigo:selectedProd.codigo,unidade:selectedProd.unidade,preco:selectedProd.preco_venda,quantidade:qtd});
+  renderItems();
+  selectedProd=null;
+  document.getElementById('item-search').value='';
+  document.getElementById('item-qtd').value='1';
+}
+
+function removeItem(i){itemList.splice(i,1);renderItems();}
+
+function renderItems(){
+  let total=0;
+  const tb=document.getElementById('items-tb');
+  if(!itemList.length){tb.innerHTML='<tr><td colspan="7"><div class="empty" style="padding:20px"><p>Nenhum item</p></div></td></tr>';document.getElementById('total-label').textContent='R$ 0,00';return;}
+  tb.innerHTML=itemList.map((it,i)=>{const sub=it.quantidade*it.preco;total+=sub;return`
+    <tr>
+      <td><code>${it.codigo}</code></td>
+      <td>${it.nome}</td>
+      <td>${it.quantidade.toLocaleString('pt-BR')}</td>
+      <td>${it.unidade}</td>
+      <td>${brl(it.preco)}</td>
+      <td style="color:var(--orange);font-weight:600">${brl(sub)}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeItem(${i})">🗑</button></td>
+    </tr>`;}).join('');
+  document.getElementById('total-label').textContent=brl(total);
+}
+
+function openModal(){document.getElementById('modal').classList.add('open');}
+function closeModal(){document.getElementById('modal').classList.remove('open');itemList=[];}
+
+async function salvar(){
+  if(!itemList.length){toast('Adicione pelo menos um item','error');return;}
+  try{
+    await api('/api/estoque/saida','POST',{
+      motivo:document.getElementById('f-motivo').value,
+      observacao:document.getElementById('f-obs').value,
+      itens:itemList.map(i=>({produto_id:i.produto_id,quantidade:i.quantidade})),
+    });
+    toast('Saída registrada!','success');
+    closeModal();loadSaidas();
+  }catch(e){toast(e.message,'error');}
+}
+
+async function loadSaidas(){
+  const rows=await api('/api/estoque/saidas');
+  const tb=document.getElementById('tb');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div><p>Nenhuma saída registrada</p></div></td></tr>';return;}
+  tb.innerHTML=rows.map(r=>`
+    <tr>
+      <td><code>${r.numero}</code></td>
+      <td>${r.motivo||'–'}</td>
+      <td style="color:var(--text3)">${r.criado_em}</td>
+      <td>${r.qtd_itens} item(s)</td>
+      <td style="color:var(--orange);font-weight:600">${brl(r.valor_total)}</td>
+      <td>${r.usuario||'–'}</td>
+    </tr>`).join('');
+}
+loadSaidas();
+</script>
+{% endblock %}

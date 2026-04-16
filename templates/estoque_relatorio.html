@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Relatório de Estoque{% endblock %}
+{% block page_title %}Relatório de Estoque{% endblock %}
+{% block topbar_extra %}
+<button class="btn btn-success" onclick="exportCSV()">⬇️ Exportar CSV</button>
+{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="section-header">
+    <div class="section-title">Estoque Atual</div>
+    <button class="btn btn-ghost btn-sm" onclick="load()">🔄 Atualizar</button>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Código</th><th>Produto</th><th>UN</th><th>Categoria</th><th>Qtd</th><th>Custo Unit.</th><th>Markup</th><th>Venda Unit.</th><th>Total Estoque</th></tr></thead>
+      <tbody id="tb"></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="8" style="text-align:right;font-weight:700;padding:14px">TOTAL ESTOQUE:</td>
+          <td style="color:var(--yellow);font-weight:800;font-family:'Syne',sans-serif;font-size:16px" id="total-footer">–</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function load(){
+  const d=await api('/api/estoque/relatorio');
+  const tb=document.getElementById('tb');
+  if(!d.produtos.length){tb.innerHTML='<tr><td colspan="9"><div class="empty"><div class="empty-icon">📦</div><p>Estoque vazio</p></div></td></tr>';return;}
+  tb.innerHTML=d.produtos.map(p=>`
+    <tr>
+      <td><code>${p.codigo}</code></td>
+      <td><strong>${p.nome}</strong></td>
+      <td>${p.unidade}</td>
+      <td>${p.categoria||'–'}</td>
+      <td style="font-weight:700;color:${p.qtd_estoque>0?'var(--green)':'var(--red)'}">${p.qtd_estoque.toLocaleString('pt-BR')}</td>
+      <td>${brl(p.custo_unitario)}</td>
+      <td>${p.markup}%</td>
+      <td style="color:var(--orange);font-weight:600">${brl(p.preco_venda)}</td>
+      <td style="color:var(--green);font-weight:600">${brl(p.qtd_estoque*p.preco_venda)}</td>
+    </tr>`).join('');
+  document.getElementById('total-footer').textContent=brl(d.total_estoque);
+}
+function exportCSV(){window.location='/api/estoque/exportar-csv';}
+load();
+</script>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Banco de Dados{% endblock %}
+{% block page_title %}Banco de Dados{% endblock %}
+{% block content %}
+<div class="stat-grid" style="margin-bottom:20px">
+  <div class="stat-card"><div class="stat-label">Entradas</div><div class="stat-value" id="s-ent">–</div></div>
+  <div class="stat-card"><div class="stat-label">Saídas</div><div class="stat-value" id="s-sai" style="color:var(--red)">–</div></div>
+  <div class="stat-card"><div class="stat-label">Pedidos</div><div class="stat-value" id="s-ped" style="color:var(--yellow)">–</div></div>
+  <div class="stat-card"><div class="stat-label">Orçamentos</div><div class="stat-value" id="s-orc" style="color:var(--green)">–</div></div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="section-title" style="margin-bottom:12px">📥 Entradas Registradas</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nº Entrada</th><th>Produto</th><th>Qtd</th><th>Vlr NF</th><th>Custo Unit.</th><th>Markup</th><th>Venda Unit.</th><th>Data</th></tr></thead>
+      <tbody id="tb-ent"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="section-title" style="margin-bottom:12px">📤 Saídas Registradas</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nº Saída</th><th>Motivo</th><th>Itens</th><th>Total</th><th>Data</th></tr></thead>
+      <tbody id="tb-sai"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <div class="section-title" style="margin-bottom:12px">🛒 Pedidos</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nº Pedido</th><th>Status</th><th>Total</th><th>Data</th></tr></thead>
+      <tbody id="tb-ped"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="section-title" style="margin-bottom:12px">📝 Orçamentos</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nº Orçamento</th><th>Status</th><th>Total</th><th>Data</th></tr></thead>
+      <tbody id="tb-orc"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const empty=(cols)=>`<tr><td colspan="${cols}"><div class="empty"><div class="empty-icon">📭</div><p>Nenhum registro</p></div></td></tr>`;
+
+(async ()=>{
+  const d=await api('/api/banco-dados');
+  document.getElementById('s-ent').textContent=d.total_entradas;
+  document.getElementById('s-sai').textContent=d.total_saidas;
+  document.getElementById('s-ped').textContent=d.total_pedidos;
+  document.getElementById('s-orc').textContent=d.total_orcamentos;
+
+  document.getElementById('tb-ent').innerHTML=d.entradas.length?d.entradas.map(e=>`
+    <tr>
+      <td><code>${e.numero}</code></td><td>${e.produto}</td>
+      <td>${e.quantidade}</td><td>${brl(e.valor_total_nf)}</td>
+      <td>${brl(e.custo_unitario)}</td><td>${e.markup}%</td>
+      <td style="color:var(--orange);font-weight:600">${brl(e.preco_venda)}</td>
+      <td style="color:var(--text3)">${e.criado_em}</td>
+    </tr>`).join(''):empty(8);
+
+  document.getElementById('tb-sai').innerHTML=d.saidas.length?d.saidas.map(s=>`
+    <tr>
+      <td><code>${s.numero}</code></td><td>${s.motivo||'–'}</td>
+      <td>${s.qtd_itens} item(s)</td>
+      <td style="color:var(--orange)">${brl(s.valor_total)}</td>
+      <td style="color:var(--text3)">${s.criado_em}</td>
+    </tr>`).join(''):empty(5);
+
+  document.getElementById('tb-ped').innerHTML=d.pedidos.length?d.pedidos.map(p=>`
+    <tr>
+      <td><code>${p.numero}</code></td>
+      <td>${statusBadge(p.status)}</td>
+      <td style="color:var(--orange);font-weight:600">${brl(p.valor_total)}</td>
+      <td style="color:var(--text3)">${p.criado_em}</td>
+    </tr>`).join(''):empty(4);
+
+  document.getElementById('tb-orc').innerHTML=d.orcamentos.length?d.orcamentos.map(o=>`
+    <tr>
+      <td><code>${o.numero}</code></td>
+      <td>${statusBadge(o.status)}</td>
+      <td style="color:var(--orange);font-weight:600">${brl(o.valor_total)}</td>
+      <td style="color:var(--text3)">${o.criado_em}</td>
+    </tr>`).join(''):empty(4);
+})();
+</script>
+{% endblock %}

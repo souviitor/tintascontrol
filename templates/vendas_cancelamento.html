@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Cancelamento de Pedido{% endblock %}
+{% block page_title %}Cancelamento de Pedido{% endblock %}
+{% block content %}
+<div class="card" style="max-width:600px">
+  <div class="section-title" style="margin-bottom:16px">Cancelamento de Pedido</div>
+  <div class="form-group">
+    <label>Número do Pedido</label>
+    <input id="num-pedido" placeholder="ex: PED000001" oninput="this.value=this.value.toUpperCase()"/>
+  </div>
+  <button class="btn btn-ghost" onclick="buscar()">🔍 Buscar Pedido</button>
+</div>
+
+<!-- RESULTADO -->
+<div class="card" id="result-card" style="margin-top:16px;display:none;max-width:600px">
+  <div class="section-title" style="margin-bottom:16px">Pedido Encontrado</div>
+  <table style="width:100%;margin-bottom:12px">
+    <thead><tr><th>Nº Pedido</th><th>Status</th><th>Valor Total</th><th>Data</th></tr></thead>
+    <tbody id="tb-pedido"></tbody>
+  </table>
+  <div class="section-title" style="margin-bottom:10px;font-size:14px">Itens</div>
+  <table style="width:100%;margin-bottom:20px">
+    <thead><tr><th>Produto</th><th>Qtd</th><th>Vlr. Unit.</th><th>Total</th></tr></thead>
+    <tbody id="tb-itens"></tbody>
+  </table>
+  <div style="display:flex;gap:10px">
+    <button class="btn btn-ghost" onclick="voltar()">← Voltar</button>
+    <button class="btn btn-danger" id="btn-cancel" onclick="confirmar()">✕ Confirmar Cancelamento</button>
+  </div>
+</div>
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="modal-confirm">
+  <div class="modal" style="max-width:400px;text-align:center">
+    <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+    <div class="modal-title" style="margin-bottom:8px">Tem certeza?</div>
+    <p style="color:var(--text2);margin-bottom:20px">Esta ação é irreversível. O pedido <strong id="confirm-num" style="color:var(--orange)"></strong> será cancelado e o estoque será restaurado.</p>
+    <div style="display:flex;gap:10px;justify-content:center">
+      <button class="btn btn-ghost" onclick="document.getElementById('modal-confirm').classList.remove('open')">Não, voltar</button>
+      <button class="btn btn-danger" onclick="executarCancelamento()">Sim, cancelar pedido</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let pedidoAtual=null;
+
+async function buscar(){
+  const num=document.getElementById('num-pedido').value.trim();
+  if(!num){toast('Digite o número do pedido','error');return;}
+  try{
+    pedidoAtual=await api(`/api/pedidos/${num}`);
+    renderPedido();
+  }catch(e){toast('Pedido não encontrado','error');}
+}
+
+function renderPedido(){
+  document.getElementById('result-card').style.display='block';
+  const p=pedidoAtual;
+  document.getElementById('tb-pedido').innerHTML=`
+    <tr>
+      <td><strong>${p.numero}</strong></td>
+      <td>${statusBadge(p.status)}</td>
+      <td style="color:var(--orange);font-weight:600">${brl(p.valor_total)}</td>
+      <td style="color:var(--text3)">${p.criado_em}</td>
+    </tr>`;
+  document.getElementById('tb-itens').innerHTML=p.itens.map(i=>`
+    <tr>
+      <td>${i.produto}</td>
+      <td>${i.quantidade}</td>
+      <td>${brl(i.preco_unitario)}</td>
+      <td style="color:var(--orange)">${brl(i.total)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text3)">Sem itens</td></tr>';
+  const btn=document.getElementById('btn-cancel');
+  if(p.status!=='aberto'){
+    btn.disabled=true;btn.style.opacity='.5';btn.title='Pedido já '+p.status;
+  }
+}
+
+function voltar(){document.getElementById('result-card').style.display='none';pedidoAtual=null;}
+
+function confirmar(){
+  if(!pedidoAtual||pedidoAtual.status!=='aberto')return;
+  document.getElementById('confirm-num').textContent=pedidoAtual.numero;
+  document.getElementById('modal-confirm').classList.add('open');
+}
+
+async function executarCancelamento(){
+  document.getElementById('modal-confirm').classList.remove('open');
+  try{
+    await api(`/api/pedidos/${pedidoAtual.numero}/cancelar`,'POST');
+    toast('Pedido cancelado com sucesso!','success');
+    pedidoAtual=null;
+    document.getElementById('result-card').style.display='none';
+    document.getElementById('num-pedido').value='';
+  }catch(e){toast(e.message,'error');}
+}
+
+document.getElementById('num-pedido').addEventListener('keydown',e=>{if(e.key==='Enter')buscar();});
+</script>
+{% endblock %}

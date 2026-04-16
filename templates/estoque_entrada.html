@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Entrada de Estoque{% endblock %}
+{% block page_title %}Entrada de Estoque{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:20px">
+  <div class="section-title" style="margin-bottom:18px">Nova Entrada de Estoque</div>
+  <div class="form-grid" style="margin-bottom:12px">
+    <div class="form-group">
+      <label>Produto</label>
+      <div class="pos-rel">
+        <div class="search-bar"><span>🔍</span><input type="text" id="prod-search" placeholder="Buscar produto por nome ou código..."/></div>
+        <div class="autocomplete-list" id="ac-list"></div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Produto Selecionado</label>
+      <input id="prod-nome" readonly placeholder="Nenhum selecionado" style="background:var(--bg3)"/>
+      <input type="hidden" id="prod-id"/>
+    </div>
+  </div>
+  <div class="form-grid-3" style="margin-bottom:12px">
+    <div class="form-group"><label>Quantidade</label><input type="number" id="f-qtd" value="0" min="0" step="0.001" oninput="calcular()"/></div>
+    <div class="form-group"><label>Valor Total NF (R$)</label><input type="number" id="f-nf" value="0" min="0" step="0.01" oninput="calcular()"/></div>
+    <div class="form-group"><label>Markup (%)</label><input type="number" id="f-markup" placeholder="ex: 30" min="0" step="0.1" oninput="calcular()"/></div>
+  </div>
+  <div class="form-grid-3" style="margin-bottom:16px">
+    <div class="form-group"><label>Custo Unitário</label><input id="f-custo" readonly placeholder="–" style="background:var(--bg3)"/></div>
+    <div class="form-group"><label>Valor de Venda (Cliente)</label><input id="f-venda" readonly placeholder="–" style="background:var(--bg3);color:var(--orange);font-weight:600"/></div>
+    <div class="form-group"><label>Observação</label><input id="f-obs" placeholder="Opcional"/></div>
+  </div>
+  <button class="btn btn-primary" onclick="registrar()">✅ Registrar Entrada</button>
+</div>
+
+<div class="card">
+  <div class="section-title" style="margin-bottom:14px">Histórico de Entradas</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nº Entrada</th><th>Produto</th><th>Qtd</th><th>Vlr NF</th><th>Custo Unit.</th><th>Markup</th><th>Venda Unit.</th><th>Data</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+setupAutocomplete(
+  document.getElementById('prod-search'),
+  document.getElementById('ac-list'),
+  p => {
+    document.getElementById('prod-id').value = p.id;
+    document.getElementById('prod-nome').value = `${p.codigo} – ${p.nome}`;
+    document.getElementById('prod-search').value = '';
+    document.getElementById('ac-list').innerHTML = '';
+    if(p.markup) document.getElementById('f-markup').value = p.markup;
+    calcular();
+  }
+);
+
+function calcular(){
+  const qtd=parseFloat(document.getElementById('f-qtd').value)||0;
+  const nf=parseFloat(document.getElementById('f-nf').value)||0;
+  const mk=parseFloat(document.getElementById('f-markup').value)||0;
+  const custo=qtd>0?nf/qtd:0;
+  const venda=custo*(1+mk/100);
+  document.getElementById('f-custo').value=custo>0?brl(custo):'–';
+  document.getElementById('f-venda').value=venda>0?brl(venda):'–';
+}
+
+async function registrar(){
+  const pid=document.getElementById('prod-id').value;
+  if(!pid){toast('Selecione um produto','error');return;}
+  const qtd=parseFloat(document.getElementById('f-qtd').value)||0;
+  if(qtd<=0){toast('Quantidade deve ser maior que zero','error');return;}
+  try{
+    await api('/api/estoque/entrada','POST',{
+      produto_id:parseInt(pid),
+      quantidade:qtd,
+      valor_total_nf:parseFloat(document.getElementById('f-nf').value)||0,
+      markup:parseFloat(document.getElementById('f-markup').value)||0,
+      observacao:document.getElementById('f-obs').value,
+    });
+    toast('Entrada registrada com sucesso!','success');
+    document.getElementById('prod-id').value='';
+    document.getElementById('prod-nome').value='';
+    document.getElementById('f-qtd').value='0';
+    document.getElementById('f-nf').value='0';
+    document.getElementById('f-markup').value='';
+    document.getElementById('f-custo').value='';
+    document.getElementById('f-venda').value='';
+    document.getElementById('f-obs').value='';
+    loadEntradas();
+  }catch(e){toast(e.message,'error');}
+}
+
+async function loadEntradas(){
+  const rows=await api('/api/estoque/entradas');
+  const tb=document.getElementById('tb');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="8"><div class="empty"><div class="empty-icon">📭</div><p>Nenhuma entrada registrada</p></div></td></tr>';return;}
+  tb.innerHTML=rows.map(r=>`
+    <tr>
+      <td><code>${r.numero}</code></td>
+      <td>${r.produto}</td>
+      <td>${r.quantidade.toLocaleString('pt-BR')}</td>
+      <td>${brl(r.valor_total_nf)}</td>
+      <td>${brl(r.custo_unitario)}</td>
+      <td>${r.markup}%</td>
+      <td style="color:var(--orange);font-weight:600">${brl(r.preco_venda)}</td>
+      <td style="color:var(--text3)">${r.criado_em}</td>
+    </tr>`).join('');
+}
+loadEntradas();
+</script>
+{% endblock %}

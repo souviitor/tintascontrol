@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% block title %}Usuários – TintaControl{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Usuários</h1>
+    <p class="page-sub">Gerencie os acessos ao sistema</p>
+  </div>
+  <button type="button" class="btn btn-primary" onclick="abrirModal()"> + Novo Usuário</button>
+</div>
+
+<div class="card">
+  <table class="table" id="tblUsuarios">
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Nome</th>
+        <th>Perfil</th>
+        <th>Status</th>
+        <th>Criado em</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3 id="modalTitulo">Novo Usuário</h3>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+      <input type="hidden" id="editId">
+      <div class="form-group">
+        <label class="form-label">Username *</label>
+        <input class="form-input" id="fUsername" placeholder="ex: joao.silva">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome completo</label>
+        <input class="form-input" id="fNome" placeholder="ex: João Silva">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Perfil *</label>
+        <select class="form-input" id="fPerfil">
+          <option value="operador">Operador</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div class="form-group" id="grpSenha">
+        <label class="form-label">Senha *</label>
+        <input class="form-input" id="fSenha" type="password" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div class="form-group" id="grpSenhaEdit" style="display:none">
+        <label class="form-label">Nova senha <span style="opacity:.6;font-size:12px">(deixe em branco para manter)</span></label>
+        <input class="form-input" id="fSenhaEdit" type="password" placeholder="Nova senha">
+      </div>
+      <div class="form-group" id="grpAtivo" style="display:none">
+        <label class="form-label">Status</label>
+        <select class="form-input" id="fAtivo">
+          <option value="true">Ativo</option>
+          <option value="false">Inativo</option>
+        </select>
+      </div>
+      <div id="formErro" style="color:var(--red,#e55);font-size:13px;display:none"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .badge-perfil-admin{background:rgba(255,140,0,.15);color:var(--orange);padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;}
+  .badge-perfil-operador{background:rgba(100,180,255,.12);color:#64b4ff;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;}
+  .badge-ativo{background:rgba(60,200,100,.12);color:#3cc864;padding:3px 10px;border-radius:20px;font-size:12px;}
+  .badge-inativo{background:rgba(200,60,60,.12);color:#e55;padding:3px 10px;border-radius:20px;font-size:12px;}
+  .btn-icon{background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;font-size:16px;transition:background .2s;}
+  .btn-icon:hover{background:var(--bg3,rgba(255,255,255,.08));}
+</style>
+
+<script>
+let editando = null;
+
+async function carregarUsuarios() {
+  const r = await fetch('/api/usuarios');
+  const lista = await r.json();
+  const tbody = document.getElementById('tbody');
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.5;padding:32px">Nenhum usuário cadastrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(u => `
+    <tr>
+      <td><strong>${u.username}</strong></td>
+      <td>${u.nome || '–'}</td>
+      <td><span class="badge-perfil-${u.perfil}">${u.perfil === 'admin' ? '👑 Admin' : '👤 Operador'}</span></td>
+      <td><span class="${u.ativo ? 'badge-ativo' : 'badge-inativo'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+      <td>${u.criado_em}</td>
+      <td>
+        <button class="btn-icon" title="Editar" onclick='abrirEditar(${JSON.stringify(u)})'>✏️</button>
+        ${u.username !== 'admin' ? `<button class="btn-icon" title="Desativar" onclick="desativar(${u.id}, '${u.username}')">🗑️</button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function abrirModal() {
+  editando = null;
+  document.getElementById('modalTitulo').textContent = 'Novo Usuário';
+  document.getElementById('editId').value = '';
+  document.getElementById('fUsername').value = '';
+  document.getElementById('fUsername').disabled = false;
+  document.getElementById('fNome').value = '';
+  document.getElementById('fPerfil').value = 'operador';
+  document.getElementById('fSenha').value = '';
+  document.getElementById('grpSenha').style.display = '';
+  document.getElementById('grpSenhaEdit').style.display = 'none';
+  document.getElementById('grpAtivo').style.display = 'none';
+  document.getElementById('formErro').style.display = 'none';
+  document.getElementById('modal').classList.add('open');   // ← corrigido
+}
+
+function abrirEditar(u) {
+  editando = u.id;
+  document.getElementById('modalTitulo').textContent = 'Editar Usuário';
+  document.getElementById('editId').value = u.id;
+  document.getElementById('fUsername').value = u.username;
+  document.getElementById('fUsername').disabled = true;
+  document.getElementById('fNome').value = u.nome || '';
+  document.getElementById('fPerfil').value = u.perfil;
+  document.getElementById('fAtivo').value = String(u.ativo);
+  document.getElementById('fSenhaEdit').value = '';
+  document.getElementById('grpSenha').style.display = 'none';
+  document.getElementById('grpSenhaEdit').style.display = '';
+  document.getElementById('grpAtivo').style.display = '';
+  document.getElementById('formErro').style.display = 'none';
+  document.getElementById('modal').classList.add('open');   // ← corrigido
+}
+
+function fecharModal() {
+  document.getElementById('modal').classList.remove('open'); // ← corrigido
+}
+
+async function salvar() {
+  const erro = document.getElementById('formErro');
+  erro.style.display = 'none';
+
+  if (editando) {
+    const body = {
+      nome: document.getElementById('fNome').value.trim(),
+      perfil: document.getElementById('fPerfil').value,
+      ativo: document.getElementById('fAtivo').value === 'true',
+    };
+    const senha = document.getElementById('fSenhaEdit').value;
+    if (senha) body.senha = senha;
+
+    const r = await fetch(`/api/usuarios/${editando}`, {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) { erro.textContent = data.error; erro.style.display = ''; return; }
+  } else {
+    const username = document.getElementById('fUsername').value.trim();
+    const senha = document.getElementById('fSenha').value;
+    if (!username) { erro.textContent = 'Username é obrigatório.'; erro.style.display = ''; return; }
+    if (senha.length < 6) { erro.textContent = 'Senha deve ter pelo menos 6 caracteres.'; erro.style.display = ''; return; }
+
+    const r = await fetch('/api/usuarios', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        username,
+        nome: document.getElementById('fNome').value.trim(),
+        perfil: document.getElementById('fPerfil').value,
+        senha,
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) { erro.textContent = data.error; erro.style.display = ''; return; }
+  }
+
+  fecharModal();
+  carregarUsuarios();
+}
+
+async function desativar(id, username) {
+  if (!confirm(`Desativar o usuário "${username}"? Ele não conseguirá mais fazer login.`)) return;
+  const r = await fetch(`/api/usuarios/${id}`, { method: 'DELETE' });
+  const data = await r.json();
+  if (!r.ok) { alert(data.error); return; }
+  carregarUsuarios();
+}
+
+carregarUsuarios();
+</script>
+{% endblock %}

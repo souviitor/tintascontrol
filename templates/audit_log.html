@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% block title %}Log de Auditoria – TintaControl{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Log de Auditoria</h1>
+    <p class="page-sub">Histórico completo de movimentações e acessos</p>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card" style="padding:16px 20px;margin-bottom:16px">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+    <div class="form-group" style="margin:0;flex:1;min-width:160px">
+      <label class="form-label">Usuário</label>
+      <input class="form-input" id="filtroUser" placeholder="ex: admin" onkeyup="if(event.key==='Enter')buscar()">
+    </div>
+    <div class="form-group" style="margin:0;flex:1;min-width:180px">
+      <label class="form-label">Ação</label>
+      <select class="form-input" id="filtroAcao" onchange="buscar()">
+        <option value="">Todas</option>
+        <option value="LOGIN">Login</option>
+        <option value="LOGIN_FALHOU">Login falhou</option>
+        <option value="LOGOUT">Logout</option>
+        <option value="PRODUTO">Produto</option>
+        <option value="ENTRADA_ESTOQUE">Entrada de estoque</option>
+        <option value="SAIDA_ESTOQUE">Saída de estoque</option>
+        <option value="PEDIDO">Pedido</option>
+        <option value="USUARIO">Usuário</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" style="height:38px" onclick="buscar()">🔍 Filtrar</button>
+    <button class="btn btn-secondary" style="height:38px" onclick="limpar()">✕ Limpar</button>
+  </div>
+</div>
+
+<div class="card">
+  <div id="resumo" style="padding:10px 0 14px;font-size:13px;opacity:.7"></div>
+  <table class="table" id="tblLog">
+    <thead>
+      <tr>
+        <th style="width:160px">Data/Hora</th>
+        <th style="width:120px">Usuário</th>
+        <th style="width:160px">Ação</th>
+        <th>Detalhe</th>
+        <th style="width:120px">IP</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <!-- Paginação -->
+  <div id="paginacao" style="display:flex;gap:8px;justify-content:center;padding:16px 0;flex-wrap:wrap"></div>
+</div>
+
+<style>
+  .badge-acao{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap;}
+  .acao-LOGIN        {background:rgba(60,200,100,.15);color:#3cc864;}
+  .acao-LOGIN_FALHOU {background:rgba(220,60,60,.15);color:#e55;}
+  .acao-LOGOUT       {background:rgba(150,150,150,.15);color:#aaa;}
+  .acao-PRODUTO_CRIADO,.acao-PRODUTO_EDITADO,.acao-PRODUTO_DESATIVADO{background:rgba(100,180,255,.12);color:#64b4ff;}
+  .acao-ENTRADA_ESTOQUE{background:rgba(60,200,100,.12);color:#3cc864;}
+  .acao-SAIDA_ESTOQUE  {background:rgba(255,160,50,.15);color:var(--orange);}
+  .acao-PEDIDO_CRIADO  {background:rgba(180,100,255,.12);color:#c47fff;}
+  .acao-PEDIDO_CANCELADO{background:rgba(220,60,60,.12);color:#e55;}
+  .acao-PEDIDO_FATURADO {background:rgba(60,200,100,.12);color:#3cc864;}
+  .acao-USUARIO_CRIADO,.acao-USUARIO_EDITADO,.acao-USUARIO_DESATIVADO{background:rgba(255,200,50,.12);color:#ffc832;}
+  .acao-default      {background:rgba(255,255,255,.07);color:var(--text2);}
+  .btn-pag{padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text2);cursor:pointer;font-size:13px;}
+  .btn-pag.active{background:var(--orange);color:#fff;border-color:var(--orange);}
+  .btn-pag:hover:not(.active){background:var(--bg3);}
+</style>
+
+<script>
+let paginaAtual = 1;
+
+function corAcao(acao) {
+  const classes = ['LOGIN','LOGIN_FALHOU','LOGOUT','PRODUTO_CRIADO','PRODUTO_EDITADO','PRODUTO_DESATIVADO',
+    'ENTRADA_ESTOQUE','SAIDA_ESTOQUE','PEDIDO_CRIADO','PEDIDO_CANCELADO','PEDIDO_FATURADO',
+    'USUARIO_CRIADO','USUARIO_EDITADO','USUARIO_DESATIVADO'];
+  return classes.includes(acao) ? `acao-${acao}` : 'acao-default';
+}
+
+async function buscar(page) {
+  page = page || 1;
+  paginaAtual = page;
+  const user = document.getElementById('filtroUser').value.trim();
+  const acao = document.getElementById('filtroAcao').value;
+  const params = new URLSearchParams({page});
+  if (user) params.set('username', user);
+  if (acao) params.set('acao', acao);
+
+  const r = await fetch('/api/audit-log?' + params.toString());
+  const data = await r.json();
+
+  document.getElementById('resumo').textContent =
+    `${data.total} registro${data.total !== 1 ? 's' : ''} encontrado${data.total !== 1 ? 's' : ''} · página ${data.page} de ${data.pages || 1}`;
+
+  const tbody = document.getElementById('tbody');
+  if (!data.logs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;opacity:.5;padding:32px">Nenhum registro encontrado.</td></tr>';
+    document.getElementById('paginacao').innerHTML = '';
+    return;
+  }
+
+  tbody.innerHTML = data.logs.map(l => `
+    <tr>
+      <td style="white-space:nowrap;font-size:12px">${l.criado_em}</td>
+      <td><strong>${l.username}</strong></td>
+      <td><span class="badge-acao ${corAcao(l.acao)}">${l.acao}</span></td>
+      <td style="font-size:13px;opacity:.85">${l.detalhe || '–'}</td>
+      <td style="font-size:12px;opacity:.6">${l.ip || '–'}</td>
+    </tr>
+  `).join('');
+
+  // Paginação
+  const pag = document.getElementById('paginacao');
+  if (data.pages <= 1) { pag.innerHTML = ''; return; }
+  let html = '';
+  if (page > 1) html += `<button class="btn-pag" onclick="buscar(${page-1})">← Anterior</button>`;
+  for (let i = Math.max(1, page-2); i <= Math.min(data.pages, page+2); i++) {
+    html += `<button class="btn-pag ${i===page?'active':''}" onclick="buscar(${i})">${i}</button>`;
+  }
+  if (page < data.pages) html += `<button class="btn-pag" onclick="buscar(${page+1})">Próximo →</button>`;
+  pag.innerHTML = html;
+}
+
+function limpar() {
+  document.getElementById('filtroUser').value = '';
+  document.getElementById('filtroAcao').value = '';
+  buscar(1);
+}
+
+buscar();
+</script>
+{% endblock %}

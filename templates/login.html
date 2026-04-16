@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>TintaControl – Login</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{--orange:#F97316;--orange-dark:#EA580C;}
+[data-theme="dark"]{--bg:#0F1117;--card:#171B26;--border:rgba(255,255,255,.07);--text:#F1F5F9;--text2:#94A3B8;--input:#0F1117;}
+[data-theme="light"]{--bg:#F1F5F9;--card:#FFFFFF;--border:rgba(0,0,0,.1);--text:#0F172A;--text2:#64748B;--input:#F8FAFC;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.theme-toggle{position:fixed;top:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:8px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;border:1px solid var(--border);}
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:40px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.logo{display:flex;align-items:center;gap:14px;margin-bottom:32px;}
+.logo-icon{width:48px;height:48px;background:linear-gradient(135deg,#F97316,#EA580C);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;}
+.logo-text{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;}
+.logo-text span{color:var(--orange);}
+h2{font-family:'Syne',sans-serif;font-size:24px;font-weight:700;margin-bottom:6px;}
+.subtitle{color:var(--text2);font-size:14px;margin-bottom:28px;}
+label{display:block;font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);margin-bottom:6px;}
+input{width:100%;background:var(--input);border:1px solid var(--border);border-radius:10px;padding:12px 16px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;transition:border-color .2s;margin-bottom:16px;}
+input:focus{outline:none;border-color:var(--orange);}
+.btn{width:100%;background:linear-gradient(135deg,var(--orange),var(--orange-dark));color:#fff;border:none;border-radius:10px;padding:13px;font-size:15px;font-weight:700;font-family:'Syne',sans-serif;cursor:pointer;transition:opacity .2s,transform .1s;margin-top:4px;}
+.btn:hover{opacity:.9;transform:translateY(-1px);}
+.btn:active{transform:translateY(0);}
+.hint{text-align:center;color:var(--text2);font-size:13px;margin-top:18px;}
+.hint span{color:var(--orange);font-weight:600;}
+.error{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#EF4444;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px;}
+</style>
+</head>
+<body>
+<button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">🌙</button>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">🎨</div>
+    <div class="logo-text">Tinta<span>Control</span></div>
+  </div>
+  <h2>Bem-vindo!</h2>
+  <p class="subtitle">Faça login para acessar o sistema</p>
+  {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  <div id="errMsg" class="error" style="display:none"></div>
+  <div>
+    <label>Usuário</label>
+    <input id="user" type="text" placeholder="Digite seu usuário" autocomplete="username"/>
+    <label>Senha</label>
+    <input id="pass" type="password" placeholder="••••••••" autocomplete="current-password"/>
+    <button class="btn" onclick="doLogin()">Entrar no Sistema</button>
+  </div>
+</div>
+<script>
+const t = localStorage.getItem('tc-theme')||'dark';
+document.documentElement.setAttribute('data-theme',t);
+document.getElementById('themeBtn').textContent = t==='dark'?'🌙':'☀️';
+function toggleTheme(){
+  const c=document.documentElement.getAttribute('data-theme');
+  const n=c==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',n);
+  localStorage.setItem('tc-theme',n);
+  document.getElementById('themeBtn').textContent=n==='dark'?'🌙':'☀️';
+}
+async function doLogin(){
+  const u=document.getElementById('user').value;
+  const p=document.getElementById('pass').value;
+  if(!u||!p){showErr('Preencha usuário e senha.');return;}
+  const res=await fetch('/',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,senha:p})});
+  const d=await res.json();
+  if(d.ok) location.href='/dashboard';
+  else showErr(d.error||'Erro ao fazer login.');
+}
+function showErr(m){const e=document.getElementById('errMsg');e.textContent=m;e.style.display='block';}
+document.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+</script>
+</body>
+</html>
