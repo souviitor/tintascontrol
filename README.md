@@ -20,40 +20,8 @@ Desenvolvido com **Python + Flask + PostgreSQL**.
 - 🧾 Gerar NF-e / DANFE (simulação)
 - 🗄️ Banco de Dados (visão consolidada de todos os registros)
 
----
 
-## 🚀 Como rodar
-
-### 1. Pré-requisitos
-- Python 3.10+
-- PostgreSQL rodando localmente
-
-### 2. Criar o banco de dados
-```sql
-CREATE DATABASE tintacontrol;
-```
-
-### 3. Instalar dependências
-```bash
-cd tintacontrol
-pip install -r requirements.txt
-```
-
-### 4. Configurar (opcional)
-Crie um arquivo `.env` ou exporte as variáveis:
-```bash
-export DATABASE_URL="postgresql://postgres:SUA_SENHA@localhost:5432/tintacontrol"
-export SECRET_KEY="sua-chave-secreta-aqui"
-```
-
-### 5. Rodar o sistema
-```bash
-python app.py
-```
-
-Acesse: **http://localhost:5000**
-
-### 6. Login padrão
+ Login padrão
 - Usuário: `admin`
 - Senha: `admin123`
 
